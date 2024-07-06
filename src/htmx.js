@@ -2810,7 +2810,8 @@ var htmx = (function () {
             // JESS: tracing goes in here somewhere
             HnyOtelWeb.inSpanAsync("htmx", "hx-" + verb, async () => {
               HnyOtelWeb.setAttributes({
-                "htmx.trigger": JSON.stringify(triggerSpec),
+                "htmx.trigger": triggerSpec.trigger,
+                "htmx.triggerSpec": JSON.stringify(triggerSpec),
                 "htmx.node": nodeData.path,
               });
               const elt = asElement(node);
@@ -3680,11 +3681,18 @@ var htmx = (function () {
    * @param {boolean} validate
    */
   function processInputValue(processed, formData, errors, elt, validate) {
+    HnyOtelWeb.setAttributes({ "htmx.processInputValue.element.id": elt?.id });
     if (elt == null || haveSeenNode(processed, elt)) {
+      HnyOtelWeb.setAttributes({
+        "htmx.processInputValue.wtf": "processed before",
+      });
       return;
     } else {
       processed.push(elt);
     }
+    HnyOtelWeb.setAttributes({
+      "htmx.processInputValue.shouldIncludeElement": shouldInclude(elt),
+    });
     if (shouldInclude(elt)) {
       const name = getRawAttribute(elt, "name");
       // @ts-ignore value will be undefined for non-input elements, which is fine
@@ -4516,12 +4524,16 @@ var htmx = (function () {
     if (elt == null) {
       elt = getDocument().body;
     }
+    HnyOtelWeb.setAttributes({ "htmx.element.id": elt.id });
     const responseHandler = etc.handler || handleAjaxResponse;
     const select = etc.select || null;
 
     if (!bodyContains(elt)) {
       // do not issue requests for elements removed from the DOM
       maybeCall(resolve);
+      HnyOtelWeb.setAttributes({
+        "htmx.wtf": "Element was removed from the DOM, it seems",
+      });
       return promise;
     }
     const target = etc.targetOverride || asElement(getTarget(elt));
@@ -4530,11 +4542,16 @@ var htmx = (function () {
         target: getAttributeValue(elt, "hx-target"),
       });
       maybeCall(reject);
+      HnyOtelWeb.setAttributes({ "htmx.wtf": "target error of some sort" });
       return promise;
     }
 
     let eltData = getInternalData(elt);
     const submitter = eltData.lastButtonClicked;
+    HnyOtelWeb.setAttributes({
+      "htmx.target.id": target.id,
+      "htmx.submitter.id": submitter?.id,
+    });
 
     if (submitter) {
       const buttonPath = getRawAttribute(submitter, "formaction");
@@ -4620,6 +4637,7 @@ var htmx = (function () {
     if (eltData.xhr) {
       if (eltData.abortable) {
         triggerEvent(syncElt, "htmx:abort"); // abort the current request and continue
+        HnyOtelWeb.setAttributes({ "htmx.wtf": "abort in action" });
       } else {
         if (queueStrategy == null) {
           if (event) {
@@ -4639,6 +4657,11 @@ var htmx = (function () {
         if (eltData.queuedRequests == null) {
           eltData.queuedRequests = [];
         }
+
+        HnyOtelWeb.setAttributes({
+          "htmx.queueStrategy": queueStrategy,
+          "htmx.queueLength": eltData.queuedRequests.length,
+        });
         if (queueStrategy === "first" && eltData.queuedRequests.length === 0) {
           eltData.queuedRequests.push(function () {
             issueAjaxRequest(verb, path, elt, event, etc);
@@ -4654,6 +4677,8 @@ var htmx = (function () {
           });
         }
         maybeCall(resolve);
+
+        HnyOtelWeb.setAttributes({ "htmx.wtf": "queued up" });
         return promise;
       }
     }
@@ -4679,6 +4704,7 @@ var htmx = (function () {
       ) {
         maybeCall(resolve);
         endRequestLock();
+        HnyOtelWeb.setAttributes({ "htmx.wtf": "prompt says no" });
         return promise;
       }
     }
@@ -4687,6 +4713,7 @@ var htmx = (function () {
       if (!confirm(confirmQuestion)) {
         maybeCall(resolve);
         endRequestLock();
+        HnyOtelWeb.setAttributes({ "htmx.wtf": "confirm says no" });
         return promise;
       }
     }
@@ -4700,7 +4727,9 @@ var htmx = (function () {
     if (etc.headers) {
       headers = mergeObjects(headers, etc.headers);
     }
+    HnyOtelWeb.setAttributes({ "htmx.headers": JSON.stringify(headers) });
     const results = getInputValues(elt, verb);
+    HnyOtelWeb.setAttributes({ "htmx.results": JSON.stringify(results) });
     let errors = results.errors;
     const rawFormData = results.formData;
     if (etc.values) {
