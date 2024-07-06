@@ -21,6 +21,7 @@ var htmx = (function () {
       console.log("Skipping traces, no Hny");
       return fn();
     },
+    setAttributes() {},
   };
   // @ts-ignore
   if (typeof window.Hny == "undefined") {
@@ -2808,6 +2809,10 @@ var htmx = (function () {
             console.log("Attempting tracing");
             // JESS: tracing goes in here somewhere
             HnyOtelWeb.inSpanAsync("htmx", "hx-" + verb, async () => {
+              HnyOtelWeb.setAttributes({
+                "htmx.trigger": JSON.stringify(triggerSpec),
+                "htmx.node": nodeData.path,
+              });
               const elt = asElement(node);
               if (closest(elt, htmx.config.disableSelector)) {
                 cleanUpElement(elt);

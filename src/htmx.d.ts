@@ -88,7 +88,7 @@ type HtmxSwapSpecification = {
 type ConditionalFunction = ((this: Node, evt: Event) => boolean) & {
     source: string;
 };
-type HtmxTriggerSpecification = {
+type HtmxTriggerSpecification = {w
     trigger: string;
     pollInterval?: number;
     eventFilter?: ConditionalFunction;
