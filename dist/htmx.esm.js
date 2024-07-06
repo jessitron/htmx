@@ -1,6 +1,8 @@
 var htmx = (function() {
   'use strict'
 
+  console.log("JESS IS HERE IN HTMX");
+
   // Public API
   const htmx = {
     // Tsc madness here, assigning the functions directly results in an invalid TypeScript output, but reassigning is fine
@@ -1626,6 +1628,9 @@ var htmx = (function() {
    * @param {HtmxSettleInfo} settleInfo
    */
   function swapOuterHTML(target, fragment, settleInfo) {
+    if (target instanceof Element && target.tagName === 'BODY') { // special case the body to innerHTML because DocumentFragments can't contain a body elt unfortunately
+      return swapInnerHTML(target, fragment, settleInfo)
+    }
     /** @type {Node} */
     let newElt
     const eltBeforeNewContent = target.previousSibling
