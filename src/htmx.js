@@ -2935,7 +2935,7 @@ var htmx = (function () {
    * @param {Element} elt
    * @returns {NodeListOf<Element>|[]}
    */
-  function findElementsToProcess(elt) {
+  function findElementsToProcess(elt) { // JESS this looks important
     if (elt.querySelectorAll) {
       const boostedSelector =
         ", [hx-boost] a, [data-hx-boost] a, a[hx-boost], a[data-hx-boost]";
@@ -3131,7 +3131,8 @@ var htmx = (function () {
   }
 
   /**
-   * Processes new content, enabling htmx behavior. This can be useful if you have content that is added to the DOM outside of the normal htmx request cycle but still want htmx attributes to work.
+   * Processes new content, enabling htmx behavior. JESS: this looks useful
+   * This can be useful if you have content that is added to the DOM outside of the normal htmx request cycle but still want htmx attributes to work.
    *
    * @see https://htmx.org/api/#process
    *
@@ -5529,6 +5530,8 @@ var htmx = (function () {
 
   // initialize the document
   ready(function () {
+    // JESS: Here we go
+    console.log("JESS: Initializing htmx")
     mergeMetaConfig();
     insertIndicatorStyles();
     let body = getDocument().body;
