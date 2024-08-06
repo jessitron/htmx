@@ -1,7 +1,7 @@
 var htmx = (function () {
   "use strict";
 
-  // JESS is here
+  // JESS is here. Note: We are looking for @jessitronica/hny-otel-web:0.8.0 (or probably later versions)
   console.log("JESS IS HERE IN HTMX");
 
   if (typeof window === "undefined") {
@@ -22,6 +22,8 @@ var htmx = (function () {
       return fn();
     },
     setAttributes() {},
+    recordException() {},
+    addSpanEvent() {},
   };
   // @ts-ignore
   if (typeof window.Hny == "undefined") {
@@ -29,9 +31,11 @@ var htmx = (function () {
   } else {
     console.log("JESS: HNY IS HERE", HnyOtelWeb);
   }
+  HnyOtelWeb.INTERNAL_TRACER = "htmx-internal"; // this is for spans that are useful for understanding htmx itself
+  HnyOtelWeb.APP_TRACER = "htmx"; // this is for spans that are useful for understanding the application using htmx
 
   // Now let's put a span around the rest of the initialization
-  return HnyOtelWeb.inSpan("htmx", "htmx.init", () => {
+  return HnyOtelWeb.inSpan(HnyOtelWeb.INTERNAL_TRACER, "htmx.init", () => {
     // end JESS
 
     // Public API
@@ -376,6 +380,14 @@ var htmx = (function () {
     // Utilities
     //= ===================================================================
 
+    // JESS
+    function safeStringify(obj) {
+      try {
+        return JSON.stringify(obj);
+      } catch (e) {
+        return "unstringifiable";
+      }
+    }
     /**
      * @param {string} tag
      * @param {boolean} global
@@ -495,6 +507,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: what is going on here, looks confusing
      * @param {Element} initialElement
      * @param {Element} ancestor
      * @param {string} attributeName
@@ -807,6 +820,7 @@ var htmx = (function () {
       if (!data) {
         data = elt[dataProp] = {};
       }
+      HnyOtelWeb.setAttributes({ "htmx.internal-data": safeStringify(data) });
       return data;
     }
 
@@ -979,6 +993,10 @@ var htmx = (function () {
      */
     function logAll() {
       htmx.logger = function (elt, event, data) {
+        HnyOtelWeb.addSpanEvent("htmx", event, {
+          "htmx.target": elt.id,
+          "htmx.data": safeStringify(data),
+        });
         if (console) {
           console.log(event, elt, data);
         }
@@ -1225,6 +1243,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: this function contains the valid selectors, for an htmx-looking value of 'selector'
      * @param {Node|Element|Document|string} elt
      * @param {string} selector
      * @param {boolean=} global
@@ -1331,6 +1350,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: this looks important
      * @template {EventTarget} T
      * @param {T|string} eltOrSelector
      * @param {T} [context]
@@ -3100,6 +3120,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: seems important to htmx
      * @param {Element|HTMLInputElement} elt
      */
     function initNode(elt) {
@@ -3152,7 +3173,7 @@ var htmx = (function () {
 
     /**
      * Processes new content, enabling htmx behavior. This can be useful if you have content that is added to the DOM outside of the normal htmx request cycle but still want htmx attributes to work.
-     *
+     * JESS: this looks important to htmx
      * @see https://htmx.org/api/#process
      *
      * @param {Element|string} elt element to process
@@ -3241,7 +3262,11 @@ var htmx = (function () {
       });
     }
 
-    function logError(msg) {
+  function logError(msg) {
+      HnyOtelWeb.addSpanEvent("error yo", {
+        "error.message": msg,
+        error: true,
+      });
       if (console.error) {
         console.error(msg);
       } else if (console.log) {
@@ -3260,32 +3285,36 @@ var htmx = (function () {
      * @returns {boolean}
      */
     function triggerEvent(elt, eventName, detail) {
-      elt = resolveTarget(elt);
-      if (detail == null) {
-        detail = {};
-      }
-      detail.elt = elt;
-      const event = makeEvent(eventName, detail);
-      if (htmx.logger && !ignoreEventForLogging(eventName)) {
-        htmx.logger(elt, eventName, detail);
-      }
-      if (detail.error) {
-        logError(detail.error);
-        triggerEvent(elt, "htmx:error", { errorInfo: detail });
-      }
-      let eventResult = elt.dispatchEvent(event);
-      const kebabName = kebabEventName(eventName);
-      if (eventResult && kebabName !== eventName) {
-        const kebabedEvent = makeEvent(kebabName, event.detail);
-        eventResult = eventResult && elt.dispatchEvent(kebabedEvent);
-      }
-      withExtensions(asElement(elt), function (extension) {
-        eventResult =
-          eventResult &&
-          extension.onEvent(eventName, event) !== false &&
-          !event.defaultPrevented;
+      return HnyOtelWeb.inSpan(HnyOtelWeb.APP_TRACER, "trigger " + eventName, () => {
+        HnyOtelWeb.setAttributes({ "htmx.detail": safeStringify(detail) });
+        elt = resolveTarget(elt);
+        if (detail == null) {
+          detail = {};
+        }
+        detail.elt = elt;
+        const event = makeEvent(eventName, detail);
+        if (htmx.logger && !ignoreEventForLogging(eventName)) {
+          htmx.logger(elt, eventName, detail);
+        }
+        if (detail.error) {
+          logError(detail.error);
+          triggerEvent(elt, "htmx:error", { errorInfo: detail });
+        }
+        let eventResult = elt.dispatchEvent(event);
+        const kebabName = kebabEventName(eventName);
+        if (eventResult && kebabName !== eventName) {
+          const kebabedEvent = makeEvent(kebabName, event.detail);
+          eventResult = eventResult && elt.dispatchEvent(kebabedEvent);
+        }
+        withExtensions(asElement(elt), function (extension) {
+          eventResult =
+            eventResult &&
+            extension.onEvent(eventName, event) !== false &&
+            !event.defaultPrevented;
+        });
+        HnyOtelWeb.setAttributes({ "htmx.result": eventResult });
+        return eventResult;
       });
-      return eventResult;
     }
 
     //= ===================================================================
@@ -3304,6 +3333,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: what does this do? What is history cache?
      * @param {string} url
      * @param {Element} rootElt
      */
@@ -3596,6 +3626,7 @@ var htmx = (function () {
     }
 
     /**
+     * JESS: its this where we change the loading indicators?
      * @param {Element[]} indicators
      * @param {Element[]} disabled
      */
