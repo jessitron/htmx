@@ -12,9 +12,13 @@ var htmx = (function () {
 
   // @ts-ignore
   // Requires version 0.10.2 or greater of jessitron/hny-otel-web, separately initialized.
-  if (!window.Hny) {
-    console.log("JESS: Skipping traces, no Hny");
+  // @ts-ignore
+  if (typeof window.Hny == "undefined") {
+    console.log("JESS: NO HNY, tracing won't work", HnyOtelWeb);
+  } else {
+    console.log("JESS: HNY IS HERE", HnyOtelWeb);
   }
+  const INTRUMENTATION_VERSION = "0.0.2";
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
     note: "Honeycomb tracing not found; this is a stub implementation.",
@@ -28,13 +32,7 @@ var htmx = (function () {
     recordException() {},
     addSpanEvent() {},
   };
-  // @ts-ignore
-  if (typeof window.Hny == "undefined") {
-    console.log("JESS: NO HNY, tracing won't work", HnyOtelWeb);
-  } else {
-    console.log("JESS: HNY IS HERE", HnyOtelWeb);
-  }
-  const INTRUMENTATION_VERSION = "0.0.1";
+
   HnyOtelWeb.INTERNAL_TRACER = {
     name: "htmx-internal",
     version: INTRUMENTATION_VERSION,
@@ -4627,7 +4625,7 @@ var htmx = (function () {
         "htmx.element.nodeName": elt.nodeName,
         "htmx.element.path": elt.path,
         "htmx.element.class": elt.className,
-        "htmx.element.attributes": JSON.stringify(el)
+        "htmx.element.attributes": JSON.stringify(elt.attributeHash),
       };
     }
 
