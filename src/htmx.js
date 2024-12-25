@@ -11,7 +11,7 @@ var htmx = (function () {
 
   // Requires version 0.10.2 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.3";
+  const INSTRUMENTATION_VERSION = "0.0.6";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -4621,6 +4621,10 @@ var htmx = (function () {
       if (!elt) {
         return {};
       }
+      const attributes = {};
+      for (const attr of elt.attributes) {
+        attributes[attr.name] = attr.value;
+      }
       return {
         "htmx.element.id": elt.id,
         "htmx.element.tag": elt.tagName,
@@ -4628,7 +4632,8 @@ var htmx = (function () {
         "htmx.element.nodeName": elt.nodeName,
         "htmx.element.path": elt.path,
         "htmx.element.class": elt.className,
-        "htmx.element.attributes": JSON.stringify(elt.attributeHash),
+        "htmx.element.attributes": JSON.stringify(attributes),
+        "htmx.element.nothing-interesting": "wisconsin",
       };
     }
 
