@@ -11,15 +11,18 @@ var htmx = (function () {
   // @ts-ignore
 
   // @ts-ignore
+  // Requires version 0.10.2 or greater of jessitron/hny-otel-web, separately initialized.
+  if (!window.Hny) {
+    console.log("JESS: Skipping traces, no Hny");
+  }
   const HnyOtelWeb = window.Hny || {
+    emptySpan: { spanContext() {}, setAttributes() {} },
     note: "Honeycomb tracing not found; this is a stub implementation.",
     inSpan(_tracer, _span, fn) {
-      console.log("JESS: Skipping traces, no Hny");
-      return fn();
+      return fn(this.emptySpan);
     },
     inSpanAsync(_tracer, _span, fn) {
-      console.log("JESS: Skipping traces, no Hny");
-      return fn();
+      return fn(this.emptySpan);
     },
     setAttributes() {},
     recordException() {},
@@ -31,8 +34,12 @@ var htmx = (function () {
   } else {
     console.log("JESS: HNY IS HERE", HnyOtelWeb);
   }
-  HnyOtelWeb.INTERNAL_TRACER = "htmx-internal"; // this is for spans that are useful for understanding htmx itself
-  HnyOtelWeb.APP_TRACER = "htmx"; // this is for spans that are useful for understanding the application using htmx
+  const INTRUMENTATION_VERSION = "0.0.1";
+  HnyOtelWeb.INTERNAL_TRACER = {
+    name: "htmx-internal",
+    version: INTRUMENTATION_VERSION,
+  }; // this is for spans that are useful for understanding htmx itself
+  HnyOtelWeb.APP_TRACER = { name: "htmx", version: INTRUMENTATION_VERSION }; // this is for spans that are useful for understanding the application using htmx
 
   // Now let's put a span around the rest of the initialization
   return HnyOtelWeb.inSpan(HnyOtelWeb.INTERNAL_TRACER, "htmx.init", () => {
@@ -3218,6 +3225,7 @@ var htmx = (function () {
       if (window.CustomEvent && typeof window.CustomEvent === "function") {
         // TODO: `composed: true` here is a hack to make global event handlers work with events in shadow DOM
         // This breaks expected encapsulation but needs to be here until decided otherwise by core devs
+        HnyOtelWeb.setAttributes({ "htmx.custom-event-supported": true });
         evt = new CustomEvent(eventName, {
           bubbles: true,
           cancelable: true,
@@ -3225,6 +3233,7 @@ var htmx = (function () {
           detail,
         });
       } else {
+        HnyOtelWeb.setAttributes({ "htmx.custom-event-supported": false });
         evt = getDocument().createEvent("CustomEvent");
         evt.initCustomEvent(eventName, true, true, detail);
       }
@@ -3294,9 +3303,10 @@ var htmx = (function () {
         HnyOtelWeb.INTERNAL_TRACER,
         "trigger " + eventName,
         (span) => {
-          span.setAttributes({
+          HnyOtelWeb.setAttributes({
             "htmx.detail": safeStringify(detail),
             ...attributesAboutElement(elt),
+            "jess.has-span-context": !!span,
           });
           elt = resolveTarget(elt);
           if (detail == null) {
@@ -3305,13 +3315,14 @@ var htmx = (function () {
           detail.elt = elt;
           const event = makeEvent(eventName, detail);
           if (htmx.logger && !ignoreEventForLogging(eventName)) {
+            // JESS: we could put span creation behind this condition todo
             htmx.logger(elt, eventName, detail);
           }
           if (detail.error) {
             logError(detail.error);
             triggerEvent(elt, "htmx:error", { errorInfo: detail });
           }
-          let eventResult = elt.dispatchEvent(event);
+          let eventResult = elt.dispatchEvent(event); // JESS: can I put tracing detail on this event object?
           const kebabName = kebabEventName(eventName);
           if (eventResult && kebabName !== eventName) {
             const kebabedEvent = makeEvent(kebabName, event.detail);
@@ -3323,7 +3334,7 @@ var htmx = (function () {
               extension.onEvent(eventName, event) !== false &&
               !event.defaultPrevented;
           });
-          span.setAttributes({ "htmx.result": eventResult });
+          HnyOtelWeb.setAttributes({ "htmx.result": eventResult });
           return eventResult;
         }
       );
@@ -4616,6 +4627,7 @@ var htmx = (function () {
         "htmx.element.nodeName": elt.nodeName,
         "htmx.element.path": elt.path,
         "htmx.element.class": elt.className,
+        "htmx.element.attributes": JSON.stringify(el)
       };
     }
 
@@ -4636,7 +4648,7 @@ var htmx = (function () {
           HnyOtelWeb.setAttributes({
             "htmx.verb": verb,
             "htmx.path": path,
-            ...attributesAboutElement(elt)
+            ...attributesAboutElement(elt),
           });
           let resolve = null;
           let reject = null;
