@@ -3293,8 +3293,11 @@ var htmx = (function () {
       return HnyOtelWeb.inSpan(
         HnyOtelWeb.INTERNAL_TRACER,
         "trigger " + eventName,
-        () => {
-          HnyOtelWeb.setAttributes({ "htmx.detail": safeStringify(detail) });
+        (span) => {
+          span.setAttributes({
+            "htmx.detail": safeStringify(detail),
+            ...attributesAboutElement(elt),
+          });
           elt = resolveTarget(elt);
           if (detail == null) {
             detail = {};
@@ -3320,7 +3323,7 @@ var htmx = (function () {
               extension.onEvent(eventName, event) !== false &&
               !event.defaultPrevented;
           });
-          HnyOtelWeb.setAttributes({ "htmx.result": eventResult });
+          span.setAttributes({ "htmx.result": eventResult });
           return eventResult;
         }
       );
@@ -4602,6 +4605,20 @@ var htmx = (function () {
       });
     }
 
+    function attributesAboutElement(elt) {
+      if (!elt) {
+        return {};
+      }
+      return {
+        "htmx.element.id": elt.id,
+        "htmx.element.tag": elt.tagName,
+        "htmx.element.name": elt.name,
+        "htmx.element.nodeName": elt.nodeName,
+        "htmx.element.path": elt.path,
+        "htmx.element.class": elt.className,
+      };
+    }
+
     /**
      * @param {HttpVerb} verb
      * @param {string} path
@@ -4619,12 +4636,7 @@ var htmx = (function () {
           HnyOtelWeb.setAttributes({
             "htmx.verb": verb,
             "htmx.path": path,
-            "htmx.element.id": elt?.id,
-            "htmx.element.tag": elt?.tagName,
-            "htmx.element.name": elt?.name,
-            "htmx.element.nodeName": elt?.nodeName,
-            "htmx.element.path": elt?.path, 
-            "htmx.element.class": elt?.className,
+            ...attributesAboutElement(elt)
           });
           let resolve = null;
           let reject = null;
