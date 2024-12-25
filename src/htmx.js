@@ -2,23 +2,17 @@ var htmx = (function () {
   "use strict";
 
   // JESS is here. Note: We are looking for @jessitronica/hny-otel-web:0.8.0 (or probably later versions)
-  console.log("JESS IS HERE IN HTMX");
+  console.log("JESS IS HERE IN HTMX a");
 
   if (typeof window === "undefined") {
     console.log("JESS: NO WINDOW");
     return;
   }
-  // @ts-ignore
 
-  // @ts-ignore
   // Requires version 0.10.2 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  if (typeof window.Hny == "undefined") {
-    console.log("JESS: NO HNY, tracing won't work", HnyOtelWeb);
-  } else {
-    console.log("JESS: HNY IS HERE", HnyOtelWeb);
-  }
-  const INTRUMENTATION_VERSION = "0.0.2";
+  const INSTRUMENTATION_VERSION = "0.0.3";
+
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
     note: "Honeycomb tracing not found; this is a stub implementation.",
@@ -33,11 +27,20 @@ var htmx = (function () {
     addSpanEvent() {},
   };
 
+  //@ts-ignore
+  if (typeof window.Hny == "undefined") {
+    console.log("JESS: NO HNY, tracing won't work", HnyOtelWeb);
+  } else {
+    console.log(
+      `JESS: HNY IS HERE, instrumentation version ${INSTRUMENTATION_VERSION}`
+    );
+  }
+
   HnyOtelWeb.INTERNAL_TRACER = {
     name: "htmx-internal",
-    version: INTRUMENTATION_VERSION,
+    version: INSTRUMENTATION_VERSION,
   }; // this is for spans that are useful for understanding htmx itself
-  HnyOtelWeb.APP_TRACER = { name: "htmx", version: INTRUMENTATION_VERSION }; // this is for spans that are useful for understanding the application using htmx
+  HnyOtelWeb.APP_TRACER = { name: "htmx", version: INSTRUMENTATION_VERSION }; // this is for spans that are useful for understanding the application using htmx
 
   // Now let's put a span around the rest of the initialization
   return HnyOtelWeb.inSpan(HnyOtelWeb.INTERNAL_TRACER, "htmx.init", () => {
