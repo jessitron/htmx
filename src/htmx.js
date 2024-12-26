@@ -11,7 +11,7 @@ var htmx = (function () {
 
   // Requires version 0.10.13 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.21";
+  const INSTRUMENTATION_VERSION = "0.0.25";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -1475,6 +1475,9 @@ var htmx = (function () {
      */
     function findAttributeTargets(elt, attrName) {
       const attrTarget = getClosestAttributeValue(elt, attrName);
+      HnyOtelWeb.setAttributes({
+        ["htmx.targets." + attrName]: attrTarget,
+      });
       if (attrTarget) {
         if (attrTarget === "this") {
           return [findThisElement(elt, attrName)];
@@ -1490,6 +1493,9 @@ var htmx = (function () {
             );
             return [DUMMY_ELT];
           } else {
+            HnyOtelWeb.setAttributes({
+              ["htmx.targets." + attrName + "result.exists"]: !!result,
+            });
             return result;
           }
         }
