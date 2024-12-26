@@ -9,9 +9,9 @@ var htmx = (function () {
     return;
   }
 
-  // Requires version 0.10.4 or greater of jessitron/hny-otel-web, separately initialized.
+  // Requires version 0.10.9 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.14";
+  const INSTRUMENTATION_VERSION = "0.0.18";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -3264,9 +3264,11 @@ var htmx = (function () {
      * @param {any=} detail
      */
     function triggerErrorEvent(elt, eventName, detail) {
-      HnyOtelWeb.recordException(
-        new Error(`Error event triggered: ${detail.error}`)
-      );
+      HnyOtelWeb.recordException(`${detail?.error || eventName}`, {
+        "htmx.event.name": eventName,
+        "htmx.element.oneline": describeAnElementInOneString(elt),
+        "htmx.event.detail": JSON.stringify(detail),
+      });
       triggerEvent(elt, eventName, mergeObjects({ error: eventName }, detail));
     }
 
@@ -3333,6 +3335,8 @@ var htmx = (function () {
           if (detail == null) {
             detail = {};
           }
+          // JESS begin internal propagation
+          detail.tracecontext = span.spanContext();
           detail.elt = elt;
           const event = makeEvent(eventName, detail);
           if (htmx.logger && !ignoreEventForLogging(eventName)) {
@@ -3343,7 +3347,6 @@ var htmx = (function () {
             logError(detail.error);
             triggerEvent(elt, "htmx:error", { errorInfo: detail });
           }
-          event.otel_tracecontext = HnyOtelWeb.activeContext();
           let eventResult = elt.dispatchEvent(event); // JESS: can I put tracing detail on this event object?
           const kebabName = kebabEventName(eventName);
           if (eventResult && kebabName !== eventName) {
@@ -4679,7 +4682,7 @@ var htmx = (function () {
             "htmx.path": path,
             ...attributesAboutElement(elt),
             "jess.event-exists": !!event,
-            "jess.event-has-context": !!event?.otel_tracecontext,
+            "jess.event-has-context": !!event?.detail?.tracecontext,
           });
           let resolve = null;
           let reject = null;
