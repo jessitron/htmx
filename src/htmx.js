@@ -1494,7 +1494,7 @@ var htmx = (function () {
             return [DUMMY_ELT];
           } else {
             HnyOtelWeb.setAttributes({
-              ["htmx.targets." + attrName + "result.exists"]: !!result,
+              ["htmx.targets." + attrName + ".result.exists"]: !!result,
             });
             return result;
           }
