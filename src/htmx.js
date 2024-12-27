@@ -11,7 +11,7 @@ var htmx = (function () {
 
   // Requires version 0.10.13 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.25";
+  const INSTRUMENTATION_VERSION = "0.0.29";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -3273,7 +3273,7 @@ var htmx = (function () {
       HnyOtelWeb.recordException(`${detail?.error || eventName}`, {
         "htmx.event.name": eventName,
         "htmx.element.oneline": describeAnElementInOneString(elt),
-        "htmx.event.detail": JSON.stringify(detail),
+        "htmx.event.detail": safeStringify(detail),
       });
       triggerEvent(elt, eventName, mergeObjects({ error: eventName }, detail));
     }
@@ -4683,6 +4683,8 @@ var htmx = (function () {
         HnyOtelWeb.APP_TRACER,
         "issueAjaxRequest",
         (issueAjaxRequestSpan) => {
+          const issueAjaxRequestSpanContext =
+            issueAjaxRequestSpan.spanContext();
           HnyOtelWeb.setAttributes({
             "htmx.verb": verb,
             "htmx.path": path,
@@ -5060,11 +5062,10 @@ var htmx = (function () {
           };
 
           xhr.onload = function () {
-            // TODO: I need to pass in the parent span for this
             return HnyOtelWeb.inChildSpan(
               HnyOtelWeb.APP_TRACER,
               "xhr response received",
-              issueAjaxRequestSpan.spanContext(),
+              issueAjaxRequestSpanContext,
               () => {
                 try {
                   const hierarchy = hierarchyForElt(elt);
@@ -5113,10 +5114,15 @@ var htmx = (function () {
             );
           };
           xhr.onerror = function () {
-            return HnyOtelWeb.inSpan(
+            return HnyOtelWeb.inChildSpan(
               HnyOtelWeb.INTERNAL_TRACER,
               "xhr error received",
+              issueAjaxRequestSpanContext,
               () => {
+                HnyOtelWeb.setAttributes({
+                  "htmx.request.path": responseInfo.pathInfo?.finalRequestPath,
+                  "htmx.request-config": safeStringify(requestConfig),
+                });
                 removeRequestIndicators(indicators, disableElts);
                 triggerErrorEvent(elt, "htmx:afterRequest", responseInfo);
                 triggerErrorEvent(elt, "htmx:sendError", responseInfo);
