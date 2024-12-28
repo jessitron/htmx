@@ -2889,7 +2889,7 @@ var htmx = (function () {
             addTriggerHandler(elt, triggerSpec, nodeData, function (node, evt) {
               HnyOtelWeb.inSpanAsync(
                 HnyOtelWeb.INTERNAL_TRACER,
-                "htmx " + verb,
+                "process hx-" + verb,
                 () => {
                   const elt = asElement(node);
                   if (closest(elt, htmx.config.disableSelector)) {
@@ -2922,7 +2922,7 @@ var htmx = (function () {
       const handler = (elt, evt) =>
         HnyOtelWeb.inSpan(
           HnyOtelWeb.INTERNAL_TRACER,
-          "handler for " + triggerSpec.trigger,
+          "handle " + triggerSpec.trigger,
           (span) => {
             span.setAttributes({
               "htmx.trigger": triggerSpec.trigger,
