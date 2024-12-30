@@ -1,21 +1,19 @@
 var htmx = (function () {
   "use strict";
 
-  // JESS is here. Note: We are looking for @jessitronica/hny-otel-web:0.8.0 (or probably later versions)
-  console.log("JESS IS HERE IN HTMX a");
-
   if (typeof window === "undefined") {
     console.log("JESS: NO WINDOW");
     return;
   }
 
-  // Requires version 0.10.2 or greater of jessitron/hny-otel-web, separately initialized.
+  // Requires version 0.10.13 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.5";
+  const INSTRUMENTATION_VERSION = "0.0.50";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
     note: "Honeycomb tracing not found; this is a stub implementation.",
+    activeContext() {},
     inSpan(_tracer, _span, fn) {
       return fn(this.emptySpan);
     },
@@ -29,10 +27,13 @@ var htmx = (function () {
 
   //@ts-ignore
   if (typeof window.Hny == "undefined") {
-    console.log("JESS: NO HNY, tracing won't work", HnyOtelWeb);
+    console.log(
+      "JESS: hny-otel-web not found, there shall be no instrumentation",
+      HnyOtelWeb
+    );
   } else {
     console.log(
-      `JESS: HNY IS HERE, instrumentation version ${INSTRUMENTATION_VERSION}`
+      `Welcome to Jess's htmx instrumentation, version ${INSTRUMENTATION_VERSION}`
     );
   }
 
@@ -548,7 +549,21 @@ var htmx = (function () {
           return "unset";
         }
       }
+      if (attributeValue !== null && attributeValue !== undefined) {
+        // falsey values are values
+        HnyOtelWeb.setAttributes({
+          ["htmx.attribute-found." + attributeName]: attributeValue,
+          ["htmx.attribute-found-on." + attributeName]:
+            describeAnElementInOneString(ancestor),
+        });
+      }
       return attributeValue;
+    }
+
+    function describeAnElementInOneString(elt) {
+      // jess's feeble attempt
+      if (!elt) return "undefined";
+      return `${elt.tagName} #${elt.id}`;
     }
 
     /**
@@ -1460,6 +1475,9 @@ var htmx = (function () {
      */
     function findAttributeTargets(elt, attrName) {
       const attrTarget = getClosestAttributeValue(elt, attrName);
+      HnyOtelWeb.setAttributes({
+        ["htmx.targets." + attrName]: attrTarget,
+      });
       if (attrTarget) {
         if (attrTarget === "this") {
           return [findThisElement(elt, attrName)];
@@ -1475,6 +1493,9 @@ var htmx = (function () {
             );
             return [DUMMY_ELT];
           } else {
+            HnyOtelWeb.setAttributes({
+              ["htmx.targets." + attrName + ".result.exists"]: !!result,
+            });
             return result;
           }
         }
@@ -1500,6 +1521,7 @@ var htmx = (function () {
      */
     function getTarget(elt) {
       const targetStr = getClosestAttributeValue(elt, "hx-target");
+      HnyOtelWeb.setAttributes({ "htmx.getTarget.hx-target": targetStr });
       if (targetStr) {
         if (targetStr === "this") {
           return findThisElement(elt, "hx-target");
@@ -1508,6 +1530,7 @@ var htmx = (function () {
         }
       } else {
         const data = getInternalData(elt);
+        HnyOtelWeb.setAttributes({ "htmx.getTarget.boosted": data.boosted });
         if (data.boosted) {
           return getDocument().body;
         } else {
@@ -2864,12 +2887,18 @@ var htmx = (function () {
           nodeData.verb = verb;
           triggerSpecs.forEach(function (triggerSpec) {
             addTriggerHandler(elt, triggerSpec, nodeData, function (node, evt) {
-              const elt = asElement(node);
-              if (closest(elt, htmx.config.disableSelector)) {
-                cleanUpElement(elt);
-                return;
-              }
-              issueAjaxRequest(verb, path, elt, evt);
+              HnyOtelWeb.inSpanAsync(
+                HnyOtelWeb.INTERNAL_TRACER,
+                "process hx-" + verb,
+                () => {
+                  const elt = asElement(node);
+                  if (closest(elt, htmx.config.disableSelector)) {
+                    cleanUpElement(elt);
+                    return;
+                  }
+                  issueAjaxRequest(verb, path, elt, evt);
+                }
+              );
             });
           });
         }
@@ -2889,7 +2918,32 @@ var htmx = (function () {
      * @param {HtmxNodeInternalData} nodeData
      * @param {TriggerHandler} handler
      */
-    function addTriggerHandler(elt, triggerSpec, nodeData, handler) {
+    function addTriggerHandler(elt, triggerSpec, nodeData, inputHandler) {
+      const handler = (elt, evt) =>
+        HnyOtelWeb.inSpan(
+          HnyOtelWeb.INTERNAL_TRACER,
+          "handle " + triggerSpec.trigger,
+          (span) => {
+            span.setAttributes({
+              "htmx.trigger": triggerSpec.trigger,
+              "htmx.trigger.pollInterval": triggerSpec.pollInterval,
+              "htmx.trigger.conditionalFunction.exists":
+                !!triggerSpec.eventFilter,
+              "htmx.trigger.changed": triggerSpec.changed,
+              "htmx.trigger.once": triggerSpec.once,
+              "htmx.trigger.consume": triggerSpec.consume,
+              "htmx.trigger.delay": triggerSpec.delay,
+              "htmx.trigger.from": triggerSpec.from,
+              "htmx.trigger.target": triggerSpec.target,
+              "htmx.trigger.throttle": triggerSpec.throttle,
+              "htmx.trigger.queue": triggerSpec.queue,
+              "htmx.trigger.root": triggerSpec.root,
+              "htmx.trigger.threshold": triggerSpec.threshold,
+              ...attributesAboutElement(elt),
+            });
+            return inputHandler(elt, evt);
+          }
+        );
       if (triggerSpec.trigger === "revealed") {
         initScrollHandler();
         addEventListener(elt, handler, nodeData, triggerSpec);
@@ -3247,6 +3301,11 @@ var htmx = (function () {
      * @param {any=} detail
      */
     function triggerErrorEvent(elt, eventName, detail) {
+      HnyOtelWeb.recordException(`${detail?.error || eventName}`, {
+        "htmx.event.name": eventName,
+        "htmx.element.oneline": describeAnElementInOneString(elt),
+        "htmx.event.detail": safeStringify(detail),
+      });
       triggerEvent(elt, eventName, mergeObjects({ error: eventName }, detail));
     }
 
@@ -3313,6 +3372,8 @@ var htmx = (function () {
           if (detail == null) {
             detail = {};
           }
+          // JESS begin internal propagation
+          detail.tracecontext = span.spanContext();
           detail.elt = elt;
           const event = makeEvent(eventName, detail);
           if (htmx.logger && !ignoreEventForLogging(eventName)) {
@@ -3936,6 +3997,10 @@ var htmx = (function () {
 
       // values from a <form> take precedence, overriding the regular values
       overrideFormData(formData, priorityFormData);
+
+      HnyOtelWeb.setAttributes({
+        "htmx.include.keys": JSON.stringify(Array.from(formData.keys())),
+      });
 
       return { errors, formData, values: formDataProxy(formData) };
     }
@@ -4622,8 +4687,10 @@ var htmx = (function () {
         return {};
       }
       const attributes = {};
-      for (const attr of elt.attributes) {
-        output[attr.name] = attr.value;
+      if (!!elt.attributes) {
+        for (const attr of elt.attributes) {
+          attributes[attr.name] = attr.value;
+        }
       }
       return {
         "htmx.element.id": elt.id,
@@ -4642,19 +4709,23 @@ var htmx = (function () {
      * @param {string} path
      * @param {Element} elt
      * @param {Event} event
-     * @param {HtmxAjaxEtc} [etc] // JESS: what is this thing? it seems like some plugin or deep config?
+     * @param {HtmxAjaxEtc} [etc] // JESS: what is this thing? it seems like some plugin or deep config? maybe i can use it to pass trace context?
      * @param {boolean} [confirmed]
      * @return {Promise<void>}
      */
     function issueAjaxRequest(verb, path, elt, event, etc, confirmed) {
       return HnyOtelWeb.inSpan(
         HnyOtelWeb.APP_TRACER,
-        "issueAjaxRequest",
-        () => {
+        "issue " + path,
+        (issueAjaxRequestSpan) => {
+          const issueAjaxRequestSpanContext =
+            issueAjaxRequestSpan.spanContext();
           HnyOtelWeb.setAttributes({
             "htmx.verb": verb,
             "htmx.path": path,
             ...attributesAboutElement(elt),
+            "jess.event-exists": !!event,
+            "jess.event-has-context": !!event?.detail?.tracecontext,
           });
           let resolve = null;
           let reject = null;
@@ -4674,7 +4745,7 @@ var htmx = (function () {
           if (!bodyContains(elt)) {
             // do not issue requests for elements removed from the DOM
             maybeCall(resolve);
-            return promise; /// JESS: er... what if this was 'promise' var was never defined?
+            return promise; /// JESS: er... what if this was 'promise' var was never defined? - then i guess we return undefined
           }
           const target = etc.targetOverride || asElement(getTarget(elt));
           if (target == null || target == DUMMY_ELT) {
@@ -4733,6 +4804,7 @@ var htmx = (function () {
               question: confirmQuestion,
             };
             if (triggerEvent(elt, "htmx:confirm", confirmDetails) === false) {
+              // what is the return of a trigger? that's weird
               maybeCall(resolve);
               return promise;
             }
@@ -5026,10 +5098,10 @@ var htmx = (function () {
           };
 
           xhr.onload = function () {
-            // TODO: I need to pass in the parent span for this
-            return HnyOtelWeb.inSpan(
-              HnyOtelWeb.INTERNAL_TRACER,
+            return HnyOtelWeb.inChildSpan(
+              HnyOtelWeb.APP_TRACER,
               "xhr response received",
+              issueAjaxRequestSpanContext,
               () => {
                 try {
                   const hierarchy = hierarchyForElt(elt);
@@ -5078,10 +5150,15 @@ var htmx = (function () {
             );
           };
           xhr.onerror = function () {
-            return HnyOtelWeb.inSpan(
+            return HnyOtelWeb.inChildSpan(
               HnyOtelWeb.INTERNAL_TRACER,
               "xhr error received",
+              issueAjaxRequestSpanContext,
               () => {
+                HnyOtelWeb.setAttributes({
+                  "htmx.request.path": responseInfo.pathInfo?.finalRequestPath,
+                  "htmx.request-config": safeStringify(requestConfig),
+                });
                 removeRequestIndicators(indicators, disableElts);
                 triggerErrorEvent(elt, "htmx:afterRequest", responseInfo);
                 triggerErrorEvent(elt, "htmx:sendError", responseInfo);
@@ -5144,7 +5221,8 @@ var htmx = (function () {
             : encodeParamsForBody(xhr, elt, filteredFormData);
           xhr.send(params); // JESS: omg did it finally do the thing???!??!
           return promise;
-        }
+        },
+        event?.otel_tracecontext // probably not populated, but hey, let's try it
       );
     }
 
