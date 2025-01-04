@@ -6,14 +6,14 @@ var htmx = (function () {
     return;
   }
 
-  // Requires version 0.10.13 or greater of jessitron/hny-otel-web, separately initialized.
+  // Requires version 0.10.33 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.53";
+  const INSTRUMENTATION_VERSION = "0.0.59";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
     note: "Honeycomb tracing not found; this is a stub implementation.",
-    activeContext() {},
+    activeSpanContext() {},
     inSpan(_tracer, _span, fn) {
       return fn(this.emptySpan);
     },
@@ -1440,7 +1440,7 @@ var htmx = (function () {
         const wrappedEventListener = (parameters) => {
           return HnyOtelWeb.inChildSpan(
             HnyOtelWeb.APP_TRACER,
-            "handler for " + eventArgs.event,
+            "handle event: " + eventArgs.event,
             parameters.tracecontext,
             (span) => eventArgs.listener(parameters)
           );
@@ -2934,7 +2934,7 @@ var htmx = (function () {
       const handler = (elt, evt) =>
         HnyOtelWeb.inSpan(
           HnyOtelWeb.INTERNAL_TRACER,
-          "handle trigger:" + triggerSpec.trigger,
+          "handle trigger: " + triggerSpec.trigger,
           (span) => {
             span.setAttributes({
               "htmx.trigger": triggerSpec.trigger,
@@ -2952,7 +2952,7 @@ var htmx = (function () {
               "htmx.trigger.root": triggerSpec.root,
               "htmx.trigger.threshold": triggerSpec.threshold,
               "htmx.trigger.event_exists": !!evt,
-              "htmx.event.details": JSON.stringify(evt?.detail),
+              "htmx.event.detail": safeStringify(evt?.detail),
               ...attributesAboutElement(elt),
             });
             return inputHandler(elt, evt);
@@ -3377,19 +3377,19 @@ var htmx = (function () {
       if (detail == null) {
         detail = {};
       }
-      // JESS begin internal propagation
-      detail.tracecontext = span.spanContext();
+      // JESS internal propagation
+      detail.tracecontext = HnyOtelWeb.activeSpanContext();
       detail.elt = elt;
       const event = makeEvent(eventName, detail);
       if (!ignoreEventForLogging(eventName)) {
-        HnyOtelWeb.addEvent(
-          // this would be in the scope of internal tracing, probably
+        HnyOtelWeb.addSpanEvent(
+          // this would be in the scope of internal tracing
           "trigger " + eventName,
           {
             "htmx.event": eventName,
             "htmx.detail": safeStringify(detail),
             ...attributesAboutElement(elt),
-            "jess.has-span-context": !!span,
+            "jess.has-span-context": !!detail.tracecontext,
           }
         );
         htmx.logger && htmx.logger(elt, eventName, detail);
