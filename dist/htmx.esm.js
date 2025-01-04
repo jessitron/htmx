@@ -8,7 +8,7 @@ var htmx = (function () {
 
   // Requires version 0.10.13 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.50";
+  const INSTRUMENTATION_VERSION = "0.0.53";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -1436,7 +1436,19 @@ var htmx = (function () {
     function addEventListenerImpl(arg1, arg2, arg3) {
       ready(function () {
         const eventArgs = processEventArgs(arg1, arg2, arg3);
-        eventArgs.target.addEventListener(eventArgs.event, eventArgs.listener);
+        console.log("Jess: i am wrapping a listener for ", eventArgs);
+        const wrappedEventListener = (parameters) => {
+          return HnyOtelWeb.inChildSpan(
+            HnyOtelWeb.APP_TRACER,
+            "handler for " + eventArgs.event,
+            parameters.tracecontext,
+            (span) => eventArgs.listener(parameters)
+          );
+        };
+        eventArgs.target.addEventListener(
+          eventArgs.event,
+          wrappedEventListener
+        );
       });
       const b = isFunction(arg2);
       return b ? arg2 : arg3;
@@ -2922,7 +2934,7 @@ var htmx = (function () {
       const handler = (elt, evt) =>
         HnyOtelWeb.inSpan(
           HnyOtelWeb.INTERNAL_TRACER,
-          "handle " + triggerSpec.trigger,
+          "handle trigger:" + triggerSpec.trigger,
           (span) => {
             span.setAttributes({
               "htmx.trigger": triggerSpec.trigger,
@@ -2939,6 +2951,8 @@ var htmx = (function () {
               "htmx.trigger.queue": triggerSpec.queue,
               "htmx.trigger.root": triggerSpec.root,
               "htmx.trigger.threshold": triggerSpec.threshold,
+              "htmx.trigger.event_exists": !!evt,
+              "htmx.event.details": JSON.stringify(evt?.details),
               ...attributesAboutElement(elt),
             });
             return inputHandler(elt, evt);
@@ -4700,7 +4714,7 @@ var htmx = (function () {
         "htmx.element.path": elt.path,
         "htmx.element.class": elt.className,
         "htmx.element.attributes": JSON.stringify(attributes),
-        "htmx.element.nothing-interesting": "wisconsin",
+        "htmx.element.nothing-interesting": "guinea",
       };
     }
 
