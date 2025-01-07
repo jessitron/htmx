@@ -8,7 +8,7 @@ var htmx = (function () {
 
   // Requires version 0.10.33 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.60";
+  const INSTRUMENTATION_VERSION = "0.0.63";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -2221,9 +2221,9 @@ var htmx = (function () {
       HnyOtelWeb.inSpan(
         HnyOtelWeb.INTERNAL_TRACER,
         "trigger header",
-        (span) => {
+        (processHeaderSpan) => {
           const triggerBody = xhr.getResponseHeader(header);
-          span.setAttributes({
+          processHeaderSpan.setAttributes({
             "htmx.trigger.header": header,
             "htmx.trigger.body": triggerBody,
           });
@@ -2231,17 +2231,23 @@ var htmx = (function () {
             const triggers = parseJSON(triggerBody);
             for (const eventName in triggers) {
               if (triggers.hasOwnProperty(eventName)) {
-                let detail = triggers[eventName];
-                if (isRawObject(detail)) {
-                  // @ts-ignore
-                  elt = detail.target !== undefined ? detail.target : elt;
-                } else {
-                  detail = { value: detail };
-                }
                 HnyOtelWeb.inSpan(
                   HnyOtelWeb.APP_TRACER,
                   "header triggered " + eventName,
                   (span) => {
+                    let detail = triggers[eventName];
+                    console.log("LALALA event name is _ eventName");
+                    span.setAttributes({
+                      "htmx.trigger.eventName": eventName,
+                      "htmx.trigger.originalDetail": safeStringify(detail),
+                      "htmx.trigger.isRawObject": isRawObject(detail),
+                    });
+                    if (isRawObject(detail)) {
+                      // @ts-ignore
+                      elt = detail.target !== undefined ? detail.target : elt;
+                    } else {
+                      detail = { value: detail };
+                    }
                     span.setAttributes({
                       "htmx.trigger.detail": safeStringify(detail),
                       ...attributesAboutElement(elt),
@@ -3195,6 +3201,7 @@ var htmx = (function () {
           if (!func) {
             func = new Function("event", code);
           }
+          // JESS: can I wrap this in a span? Can I find the tracecontext in the event detail?
           func.call(elt, e);
         });
       };
@@ -3405,7 +3412,7 @@ var htmx = (function () {
      * @returns {boolean}
      */
     function triggerEvent(elt, eventName, detail) {
-      elt = resolveTarget(elt);
+      elt = resolveTarget(elt); // JESS: this can return null, make a useful exception
       if (detail == null) {
         detail = {};
       }
@@ -4730,7 +4737,7 @@ var htmx = (function () {
       if (!elt) {
         return {};
       }
-      if (typeof elt === string) {
+      if (typeof elt === "string") {
         return {
           "htmx.element.selector": elt,
         };
