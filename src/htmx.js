@@ -2232,8 +2232,11 @@ var htmx = (function () {
             for (const eventName in triggers) {
               if (triggers.hasOwnProperty(eventName)) {
                 let detail = triggers[eventName];
-                if (!isRawObject(detail)) {
-                  detail = { value: detail };
+                if (isRawObject(detail)) {
+                  // @ts-ignore
+                  elt = detail.target !== undefined ? detail.target : elt
+                } else {
+                  detail = { value: detail }
                 }
                 HnyOtelWeb.inSpan(
                   HnyOtelWeb.APP_TRACER,
