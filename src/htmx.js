@@ -2234,9 +2234,9 @@ var htmx = (function () {
                 let detail = triggers[eventName];
                 if (isRawObject(detail)) {
                   // @ts-ignore
-                  elt = detail.target !== undefined ? detail.target : elt
+                  elt = detail.target !== undefined ? detail.target : elt;
                 } else {
-                  detail = { value: detail }
+                  detail = { value: detail };
                 }
                 HnyOtelWeb.inSpan(
                   HnyOtelWeb.APP_TRACER,
@@ -4729,6 +4729,11 @@ var htmx = (function () {
     function attributesAboutElement(elt) {
       if (!elt) {
         return {};
+      }
+      if (typeof elt === string) {
+        return {
+          "htmx.element.selector": elt,
+        };
       }
       const attributes = {};
       if (!!elt.attributes) {
