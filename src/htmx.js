@@ -8,7 +8,7 @@ var htmx = (function () {
 
   // Requires version 0.10.33 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.63";
+  const INSTRUMENTATION_VERSION = "0.0.66";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -3202,7 +3202,14 @@ var htmx = (function () {
             func = new Function("event", code);
           }
           // JESS: can I wrap this in a span? Can I find the tracecontext in the event detail?
-          func.call(elt, e);
+          HnyOtelWeb.inSpan(
+            HnyOtelWeb.APP_TRACER,
+            "handle event " + eventName,
+            (span) => {
+              span.setAttributes({ "htmx.handler.code": code });
+              return func.call(elt, e);
+            }
+          );
         });
       };
       elt.addEventListener(eventName, listener);
