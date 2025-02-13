@@ -9,7 +9,7 @@ var htmx = (function () {
 
   // Requires version 0.10.33 or greater of jessitron/hny-otel-web, separately initialized.
   // @ts-ignore
-  const INSTRUMENTATION_VERSION = "0.0.63";
+  const INSTRUMENTATION_VERSION = "0.0.73";
 
   const HnyOtelWeb = window.Hny || {
     emptySpan: { spanContext() {}, setAttributes() {} },
@@ -392,6 +392,12 @@ var htmx = (function () {
 
     // JESS
     function safeStringify(obj) {
+      if (obj === undefined) {
+        return "undefined";
+      }
+      if (obj === null) {
+        return "null";
+      }
       try {
         return JSON.stringify(obj);
       } catch (e) {
@@ -2237,7 +2243,6 @@ var htmx = (function () {
                   "header triggered " + eventName,
                   (span) => {
                     let detail = triggers[eventName];
-                    console.log("LALALA event name is _ eventName");
                     span.setAttributes({
                       "htmx.trigger.eventName": eventName,
                       "htmx.trigger.originalDetail": safeStringify(detail),
@@ -3202,7 +3207,15 @@ var htmx = (function () {
           if (!func) {
             func = new Function("event", code);
           }
-          func.call(elt, e);
+          // JESS: can I wrap this in a span? Can I find the tracecontext in the event detail?
+          HnyOtelWeb.inSpan(
+            HnyOtelWeb.APP_TRACER,
+            "handle event " + eventName,
+            (span) => {
+              span.setAttributes({ "htmx.handler.code": code });
+              return func.call(elt, e);
+            }
+          );
         });
       };
       elt.addEventListener(eventName, listener);
@@ -3412,7 +3425,15 @@ var htmx = (function () {
      * @returns {boolean}
      */
     function triggerEvent(elt, eventName, detail) {
+      const origElt = elt;
       elt = resolveTarget(elt); // JESS: this can return null, make a useful exception
+      if (!elt) {
+        HnyOtelWeb.recordException(`Event target not found`, {
+          "htmx.trigger.target": safeStringify(origElt),
+          "htmx.trigger.eventName": eventName,
+        });
+        return;
+      }
       if (detail == null) {
         detail = {};
       }
@@ -5205,15 +5226,18 @@ var htmx = (function () {
               }
             );
           };
-          xhr.onerror = function () {
+          xhr.onerror = function (event, event2) {
             return HnyOtelWeb.inChildSpan(
               HnyOtelWeb.INTERNAL_TRACER,
-              "xhr error received",
+              "communication failure",
               issueAjaxRequestSpanContext,
               () => {
                 HnyOtelWeb.setAttributes({
                   "htmx.request.path": responseInfo.pathInfo?.finalRequestPath,
                   "htmx.request-config": safeStringify(requestConfig),
+                  "htmx.xhr.error": safeStringify(event),
+                  "htmx.xhr.type": event.type,
+                  "htmx.xhr.error2": safeStringify(event2),
                 });
                 removeRequestIndicators(indicators, disableElts);
                 triggerErrorEvent(elt, "htmx:afterRequest", responseInfo);
