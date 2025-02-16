@@ -2976,7 +2976,7 @@ var htmx = (function () {
     function addTriggerHandler(elt, triggerSpec, nodeData, inputHandler) {
       const handler = (elt, evt) =>
         HnyOtelWeb.inSpan(
-          HnyOtelWeb.INTERNAL_TRACER,
+          HnyOtelWeb.APP_TRACER,
           "handle trigger: " + triggerSpec.trigger,
           (span) => {
             span.setAttributes({
