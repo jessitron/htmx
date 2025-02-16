@@ -5175,7 +5175,7 @@ var htmx = (function () {
 
           xhr.onload = function () {
             return HnyOtelWeb.inChildSpan(
-              HnyOtelWeb.APP_TRACER,
+              HnyOtelWeb.INTERNAL_TRACER,
               "xhr response received",
               issueAjaxRequestSpanContext,
               () => {
